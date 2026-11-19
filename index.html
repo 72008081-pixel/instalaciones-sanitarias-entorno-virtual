@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark light">
+  <title>Instalaciones Sanitarias — Entorno Virtual 3D Rayos X e Isométricos | Univ. Continental</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a href="#main-viewport" class="skip-link visually-hidden">Saltar al entorno virtual</a>
+
+  <header class="top-bar">
+    <div class="brand">
+      <div class="brand-badge" aria-hidden="true">IS</div>
+      <div>
+        <h1>Instalaciones Sanitarias — Entorno Virtual 3D Rayos X</h1>
+        <p class="subtitle">Vivienda Multifamiliar 3 Pisos + Azotea (SMP, Lima) · Docente: Ing. Aybar Galdos Josúe A.</p>
+      </div>
+    </div>
+
+    <nav class="mode-tabs" aria-label="Modos de visualización">
+      <button type="button" id="tab-3d" class="mode-btn active" aria-pressed="true">
+        Entorno 3D Rayos X (GPU)
+      </button>
+      <button type="button" id="tab-iso" class="mode-btn" aria-pressed="false">
+        Isométricos y Planos CAD (Zoom)
+      </button>
+    </nav>
+  </header>
+
+  <div class="workspace">
+    <aside class="control-panel" aria-label="Controles del modelo">
+      <!-- Controles Modo 3D -->
+      <section id="controls-3d" class="panel-group">
+        <h2>Especialidades (Colores Fosforescentes)</h2>
+        <div class="layer-list">
+          <button type="button" class="layer-toggle active" data-sys="AF" aria-pressed="true">
+            <span class="swatch sw-af" aria-hidden="true"></span>
+            <span class="lbl">Agua Fría (24 Tramos + 20 VC)</span>
+          </button>
+          <button type="button" class="layer-toggle active" data-sys="AC" aria-pressed="true">
+            <span class="swatch sw-ac" aria-hidden="true"></span>
+            <span class="lbl">Agua Caliente CPVC (3 Thermas)</span>
+          </button>
+          <button type="button" class="layer-toggle active" data-sys="DES" aria-pressed="true">
+            <span class="swatch sw-des" aria-hidden="true"></span>
+            <span class="lbl">Desagüe (MD-1..3 + CR-1..4)</span>
+          </button>
+          <button type="button" class="layer-toggle active" data-sys="VENT" aria-pressed="true">
+            <span class="swatch sw-vent" aria-hidden="true"></span>
+            <span class="lbl">Ventilación (MV-1..3 +1.80m)</span>
+          </button>
+          <button type="button" class="layer-toggle active" data-sys="PLUV" aria-pressed="true">
+            <span class="swatch sw-pluv" aria-hidden="true"></span>
+            <span class="lbl">Aguas Pluviales (SP-1..3 / MPL)</span>
+          </button>
+          <button type="button" class="layer-toggle active" data-sys="ACI" aria-pressed="true">
+            <span class="swatch sw-aci" aria-hidden="true"></span>
+            <span class="lbl">Contra Incendios (EXT + Prev.)</span>
+          </button>
+          <button type="button" class="layer-toggle active" data-sys="ARCH" aria-pressed="true">
+            <span class="swatch sw-arch" aria-hidden="true"></span>
+            <span class="lbl">Estructura Casa Rayos X</span>
+          </button>
+        </div>
+
+        <h2>Navegación por Pisos</h2>
+        <div class="floor-grid">
+          <button type="button" class="cam-btn active" data-floor="ALL">Edificio Completo</button>
+          <button type="button" class="cam-btn" data-floor="P1">1° Piso (+0.15)</button>
+          <button type="button" class="cam-btn" data-floor="P2">2° Piso (+2.95)</button>
+          <button type="button" class="cam-btn" data-floor="P3">3° Piso (+5.65)</button>
+          <button type="button" class="cam-btn" data-floor="AZ">Azotea (+8.35)</button>
+          <button type="button" id="btn-autorotate" class="cam-btn" aria-pressed="false">Rotación Auto</button>
+        </div>
+
+        <h2>Renderizado GPU WebGL2 / HDR</h2>
+        <div class="sliders">
+          <label for="rng-bloom">Brillo Neón (HDR Bloom): <span id="val-bloom">0.35</span></label>
+          <input id="rng-bloom" type="range" min="0" max="1.4" step="0.05" value="0.35">
+          <label for="rng-xray">Transparencia Rayos X Muros: <span id="val-xray">0.12</span></label>
+          <input id="rng-xray" type="range" min="0.02" max="0.45" step="0.02" value="0.12">
+        </div>
+        <p class="gpu-note">
+          Motor GPU WebGL2 (Three.js r128 + HDR UnrealBloom + ACES Filmic). Haz clic sobre cualquier tubo, válvula o accesorio para ver sus datos reales.
+        </p>
+      </section>
+
+      <!-- Controles Modo Isométricos 2D -->
+      <section id="controls-iso" class="panel-group" hidden>
+        <h2>Láminas e Isométricos Vectoriales</h2>
+        <div id="svg-selector-list" class="svg-list"></div>
+        <div class="zoom-bar">
+          <button type="button" id="btn-zoom-in" class="cam-btn">+ Acercar</button>
+          <button type="button" id="btn-zoom-out" class="cam-btn">- Alejar</button>
+          <button type="button" id="btn-zoom-fit" class="cam-btn">Ajustar Plano</button>
+        </div>
+        <p class="gpu-note">
+          Usa la rueda del ratón para hacer zoom vectorial sin pixelación y arrastra para recorrer cada codo, tee, válvula y etiqueta de unidades Hunter (U.G.).
+        </p>
+      </section>
+    </aside>
+
+    <main id="main-viewport" class="viewport-area" tabindex="-1">
+      <!-- Viewport 3D -->
+      <div id="view-3d" class="view-pane active">
+        <canvas id="three-canvas" aria-label="Modelo tridimensional de rayos X de las instalaciones sanitarias"></canvas>
+        <!-- Inspector HUD flotante siempre visible -->
+        <section class="inspector-card" aria-live="polite">
+          <h2>Inspector de Tramo / Accesorio</h2>
+          <div id="inspector-body">
+            <p class="insp-placeholder">Haz clic en cualquier tubería, válvula compuerta, therma, caja de registro o sumidero del modelo 3D para inspeccionarlo.</p>
+          </div>
+        </section>
+        <div class="hud-overlay">
+          <span class="hud-chip" id="hud-formula">Pr = Dg + Ps + Hf · Directo OK (20 m.c.a.)</span>
+          <span class="hud-chip" id="hud-stats">71 tramos · 50 accesorios · Arrastra para rotar / Rueda para zoom</span>
+        </div>
+      </div>
+
+      <!-- Viewport Vectorial CAD -->
+      <div id="view-iso" class="view-pane" hidden>
+        <div id="svg-stage" class="svg-stage" aria-label="Visor de planos e isométricos vectoriales con zoom">
+          <div id="svg-transform-layer" class="svg-transform-layer">
+            <img id="cad-svg-img" src="" alt="Plano sanitario vectorial seleccionado">
+          </div>
+          <div class="hud-overlay">
+            <span class="hud-chip" id="hud-svg-title">Cargando lámina...</span>
+            <span class="hud-chip" id="hud-zoom-pct">100%</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="bottom-bar">
+    <span>Universidad Continental — Facultad de Ingeniería Civil | NRC 25816 Grupo 1 | Normativa: RNE IS.010 Anexo N° 10, A.130, NTP 350.043-1</span>
+  </footer>
+
+  <!-- Three.js r128 + Postprocessing (OrbitControls, CopyShader, LuminosityHighPassShader, EffectComposer, RenderPass, ShaderPass, UnrealBloomPass) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
