@@ -14,6 +14,7 @@
   let wallMats = [];
   let slabMats = [];
   let pickables = [];
+  let fittingNodes = [];
   let animPulses = [];
   let selectedMesh = null;
   let autoRotate = false;
@@ -27,7 +28,12 @@
     bimData = await res.json();
     initThree();
     buildXRayArchitecture(bimData.floors);
+    buildXRayFixtures(bimData.fixtures || []);
     buildPipesAndAccessories(bimData.pipes, bimData.accessories);
+    const statsEl = document.getElementById("hud-stats");
+    if (statsEl) {
+      statsEl.textContent = `${bimData.pipes.length} tramos · ${bimData.accessories.length} accesorios 3D · Arrastra para rotar`;
+    }
     initUI();
     initSvgViewer(bimData.svgs);
     animate();
@@ -65,12 +71,29 @@
     bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(w, h), 0.35, 0.30, 0.82);
     composer.addPass(bloomPass);
 
-    // Iluminación ambiental + direccional suave
-    scene.add(new THREE.AmbientLight(0x94a3b8, 0.65));
-    const dl1 = new THREE.DirectionalLight(0xe0f2fe, 1.1);
+    // Iluminación PBR + Environment Map procedural para reflejos metálicos realistas en bronce/CPVC/PVC
+    try {
+      const envCanvas = document.createElement("canvas");
+      envCanvas.width = 256; envCanvas.height = 128;
+      const ectx = envCanvas.getContext("2d");
+      const grad = ectx.createLinearGradient(0, 0, 0, 128);
+      grad.addColorStop(0.0, "#1e3a5f");
+      grad.addColorStop(0.35, "#93c5fd");
+      grad.addColorStop(0.55, "#0f172a");
+      grad.addColorStop(1.0, "#020617");
+      ectx.fillStyle = grad; ectx.fillRect(0, 0, 256, 128);
+      const envTex = new THREE.CanvasTexture(envCanvas);
+      envTex.mapping = THREE.EquirectangularReflectionMapping;
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromEquirectangular(envTex).texture;
+      envTex.dispose(); pmrem.dispose();
+    } catch (_) {}
+
+    scene.add(new THREE.AmbientLight(0x94a3b8, 0.55));
+    const dl1 = new THREE.DirectionalLight(0xe0f2fe, 1.25);
     dl1.position.set(14, 22, 16);
     scene.add(dl1);
-    const dl2 = new THREE.DirectionalLight(0x38bdf8, 0.45);
+    const dl2 = new THREE.DirectionalLight(0x38bdf8, 0.55);
     dl2.position.set(-14, 8, -12);
     scene.add(dl2);
 
@@ -178,8 +201,50 @@
       color: hexColor,
       emissive: hexColor,
       emissiveIntensity: intensity,
-      roughness: 0.25,
-      metalness: 0.3,
+      roughness: 0.18,
+      metalness: 0.55,
+    });
+  }
+
+  function buildXRayFixtures(fixtures) {
+    const grp = sysGroups.ARCH;
+    const fixMat = new THREE.MeshStandardMaterial({
+      color: 0xbae6fd,
+      emissive: 0x0284c7,
+      emissiveIntensity: 0.22,
+      transparent: true,
+      opacity: 0.28,
+      roughness: 0.2,
+      metalness: 0.25,
+    });
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.36 });
+
+    function addXRayBox(w, h, d, wx, wy, wz) {
+      const geo = new THREE.BoxGeometry(w, h, d);
+      const mesh = new THREE.Mesh(geo, fixMat);
+      mesh.position.set(wx, wy, wz);
+      grp.add(mesh);
+      const wire = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat);
+      wire.position.set(wx, wy, wz);
+      grp.add(wire);
+    }
+
+    fixtures.forEach(fx => {
+      const p = worldVec(fx.pos);
+      if (fx.kind === "inodoro") {
+        addXRayBox(0.38, 0.36, 0.44, p[0], p[1] + 0.18, p[2] + 0.08);
+        addXRayBox(0.42, 0.42, 0.20, p[0], p[1] + 0.52, p[2] - 0.14);
+      } else if (fx.kind === "lavatorio") {
+        addXRayBox(0.46, 0.16, 0.38, p[0], p[1] + 0.78, p[2]);
+        addXRayBox(0.14, 0.70, 0.14, p[0], p[1] + 0.35, p[2]);
+      } else if (fx.kind === "ducha") {
+        addXRayBox(0.85, 0.06, 0.85, p[0], p[1] + 0.03, p[2]);
+        const head = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.03, 0.06, 12), fixMat);
+        head.position.set(p[0], p[1] + 1.98, p[2]);
+        grp.add(head);
+      } else {
+        addXRayBox(0.80, 0.18, 0.48, p[0], p[1] + 0.82, p[2]);
+      }
     });
   }
 
@@ -189,32 +254,24 @@
       const a = vectors[i], b = vectors[i + 1];
       const dist = a.distanceTo(b);
       if (dist < 0.01) continue;
-      const geo = new THREE.CylinderGeometry(radius, radius, dist, 12);
+      const geo = new THREE.CylinderGeometry(radius, radius, dist, 14);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.copy(a).add(b).multiplyScalar(0.5);
       mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
       mesh.userData = metaData;
       group.add(mesh);
       pickables.push(mesh);
-
-      // Esfera unión en nodo (codo / tee)
-      const jGeo = new THREE.SphereGeometry(radius * 1.45, 10, 10);
-      const jMesh = new THREE.Mesh(jGeo, mat);
-      jMesh.position.copy(b);
-      jMesh.userData = metaData;
-      group.add(jMesh);
-      pickables.push(jMesh);
     }
     return vectors;
   }
 
   function buildPipesAndAccessories(pipes, accessories) {
-    const pulseGeo = new THREE.SphereGeometry(0.055, 8, 8);
+    const pulseGeo = new THREE.SphereGeometry(0.052, 8, 8);
     const pulseMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
     pipes.forEach(p => {
       const cfg = SYS_COLORS[p.sys] || SYS_COLORS.AF;
-      const baseInt = p.crit ? 0.90 : 0.60;
+      const baseInt = p.crit ? 0.88 : 0.58;
       const mat = makeGlowMaterial(cfg.hex, baseInt);
       const grp = sysGroups[p.sys];
       const meta = { kind: "pipe", data: p, baseHex: cfg.hex, baseInt };
@@ -225,7 +282,7 @@
       if (vecs.length >= 2 && (p.sys === "AF" || p.sys === "AC" || p.sys === "PLUV" || p.id.startsWith("COLECTOR"))) {
         const dot = new THREE.Mesh(pulseGeo, pulseMat);
         grp.add(dot);
-        animPulses.push({ mesh: dot, path: vecs, t: Math.random(), speed: 0.18 + Math.random() * 0.14 });
+        animPulses.push({ mesh: dot, path: vecs, t: Math.random(), speed: 0.16 + Math.random() * 0.12 });
       }
     });
 
@@ -238,37 +295,99 @@
       let mesh;
 
       if (acc.kind === "valvula_compuerta") {
-        meshHex = 0x00ffff;
-        baseInt = 0.88;
+        meshHex = acc.sys === "AC" ? 0xff7b22 : 0x00f5ff;
+        baseInt = 0.90;
         const meta = { kind: "acc", data: acc, baseHex: meshHex, baseInt };
         const g = new THREE.Group();
+        const bodyMat = makeGlowMaterial(0xfbbf24, 0.55); // Cuerpo latón/bronce realista
+        const wheelMat = makeGlowMaterial(acc.sys === "AC" ? 0xef4444 : 0x00f5ff, 0.95);
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.22, 12), bodyMat);
+        body.rotation.z = Math.PI / 2;
+        const fl1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.025, 12), bodyMat);
+        fl1.rotation.z = Math.PI / 2; fl1.position.x = -0.10;
+        const fl2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.025, 12), bodyMat);
+        fl2.rotation.z = Math.PI / 2; fl2.position.x = 0.10;
+        const bonnet = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.042, 0.14, 10), bodyMat);
+        bonnet.position.y = 0.09;
+        const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.016, 8, 16), wheelMat);
+        wheel.rotation.x = Math.PI / 2; wheel.position.y = 0.17;
+        [body, fl1, fl2, bonnet, wheel].forEach((ch, idx) => {
+          ch.userData = { kind: "acc", data: acc, baseHex: idx === 4 ? (acc.sys === "AC" ? 0xef4444 : 0x00f5ff) : 0xfbbf24, baseInt: idx === 4 ? 0.95 : 0.55 };
+          g.add(ch); pickables.push(ch);
+        });
+        if (acc.dir === "y") g.rotation.y = Math.PI / 2;
+        else if (acc.dir === "z") g.rotation.z = Math.PI / 2;
+        g.position.copy(pos);
+        grp.add(g);
+        fittingNodes.push(g);
+        return;
+      } else if (acc.kind === "codo_90") {
+        meshHex = cfg.hex; baseInt = 0.80;
         const m = makeGlowMaterial(meshHex, baseInt);
-        const coneGeo = new THREE.ConeGeometry(0.08, 0.14, 6);
-        const c1 = new THREE.Mesh(coneGeo, m); c1.rotation.z = -Math.PI / 2; c1.position.x = -0.07;
-        const c2 = new THREE.Mesh(coneGeo, m); c2.rotation.z = Math.PI / 2; c2.position.x = 0.07;
-        const stem = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.04), m); stem.position.y = 0.09;
-        [c1, c2, stem].forEach(ch => { ch.userData = meta; g.add(ch); pickables.push(ch); });
+        const g = new THREE.Group();
+        const meta = { kind: "acc", data: acc, baseHex: meshHex, baseInt };
+        const core = new THREE.Mesh(new THREE.SphereGeometry(0.042, 10, 10), m);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.040, 0.014, 8, 14), m);
+        [core, ring].forEach(ch => { ch.userData = meta; g.add(ch); pickables.push(ch); });
+        g.position.copy(pos);
+        grp.add(g);
+        fittingNodes.push(g);
+        return;
+      } else if (acc.kind === "tee") {
+        meshHex = 0xe2e8f0; baseInt = 0.72;
+        const m = makeGlowMaterial(cfg.hex, 0.85);
+        const g = new THREE.Group();
+        const meta = { kind: "acc", data: acc, baseHex: cfg.hex, baseInt: 0.85 };
+        const cylX = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.14, 10), m);
+        cylX.rotation.z = Math.PI / 2;
+        const cylY = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.10, 10), m);
+        cylY.position.y = 0.04;
+        [cylX, cylY].forEach(ch => { ch.userData = meta; g.add(ch); pickables.push(ch); });
+        g.position.copy(pos);
+        grp.add(g);
+        fittingNodes.push(g);
+        return;
+      } else if (acc.kind === "therma") {
+        meshHex = 0xff6b00; baseInt = 0.75;
+        const g = new THREE.Group();
+        const tankMat = makeGlowMaterial(0xf97316, 0.68);
+        const bandMat = makeGlowMaterial(0xfef3c7, 0.45);
+        const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.74, 18), tankMat);
+        const band1 = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.08, 18), bandMat); band1.position.y = 0.25;
+        const band2 = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.08, 18), bandMat); band2.position.y = -0.25;
+        [tank, band1, band2].forEach((ch, idx) => {
+          ch.userData = { kind: "acc", data: acc, baseHex: idx === 0 ? 0xf97316 : 0xfef3c7, baseInt: idx === 0 ? 0.68 : 0.45 };
+          g.add(ch); pickables.push(ch);
+        });
         g.position.copy(pos);
         grp.add(g);
         return;
-      } else if (acc.kind === "therma") {
-        meshHex = 0xff6b00; baseInt = 0.80;
-        mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.20, 0.72, 16), makeGlowMaterial(meshHex, baseInt));
       } else if (acc.kind === "medidor") {
-        meshHex = 0xfacc15; baseInt = 0.85;
-        mesh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.20, 0.22), makeGlowMaterial(meshHex, baseInt));
+        meshHex = 0xfacc15; baseInt = 0.82;
+        const g = new THREE.Group();
+        const mBody = makeGlowMaterial(0xfacc15, 0.75);
+        const mDial = makeGlowMaterial(0x38bdf8, 0.90);
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.20, 0.26), mBody);
+        const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.05, 14), mDial); dial.position.y = 0.11;
+        [box, dial].forEach((ch, idx) => {
+          ch.userData = { kind: "acc", data: acc, baseHex: idx === 0 ? 0xfacc15 : 0x38bdf8, baseInt: 0.80 };
+          g.add(ch); pickables.push(ch);
+        });
+        g.position.copy(pos);
+        grp.add(g);
+        return;
       } else if (acc.kind === "caja_registro") {
-        meshHex = 0xff22ee; baseInt = 0.78;
-        mesh = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.16, 0.56), makeGlowMaterial(meshHex, baseInt));
+        meshHex = 0xff22ee; baseInt = 0.72;
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.14, 0.56), makeGlowMaterial(meshHex, baseInt));
       } else if (acc.kind === "sumidero") {
-        meshHex = 0xffe600; baseInt = 0.82;
-        mesh = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.07, 0.26), makeGlowMaterial(meshHex, baseInt));
+        meshHex = 0xffe600; baseInt = 0.80;
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 0.28), makeGlowMaterial(meshHex, baseInt));
       } else if (acc.kind === "sombrero") {
-        meshHex = 0x39ff14; baseInt = 0.82;
-        mesh = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.20, 10), makeGlowMaterial(meshHex, baseInt));
+        meshHex = 0x39ff14; baseInt = 0.80;
+        mesh = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.20, 12), makeGlowMaterial(meshHex, baseInt));
       } else {
-        meshHex = 0xff2244; baseInt = 0.90;
-        mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.42, 12), makeGlowMaterial(meshHex, baseInt));
+        meshHex = 0xff2244; baseInt = 0.88;
+        mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.44, 14), makeGlowMaterial(meshHex, baseInt));
       }
       mesh.position.copy(pos);
       mesh.userData = { kind: "acc", data: acc, baseHex: meshHex, baseInt };
@@ -330,7 +449,8 @@
         <dl class="insp-kv">
           <dt>Especialidad:</dt><dd>${SYS_COLORS[d.sys].label}</dd>
           <dt>Ubicación:</dt><dd>${d.piso}</dd>
-          <dt>Tipo:</dt><dd>${d.kind.replace("_", " ")}</dd>
+          <dt>Diámetro / Cap.:</dt><dd>${d.diam || "-"}</dd>
+          <dt>Tipo:</dt><dd>${d.kind.replace(/_/g, " ")}</dd>
         </dl>
         <p class="gpu-note">${d.desc}</p>`;
     }
@@ -360,13 +480,16 @@
     tab3d.addEventListener("click", () => setTab(true));
     tabIso.addEventListener("click", () => setTab(false));
 
-    // Toggle capas de especialidad fosforescentes
+    // Toggle capas de especialidad fosforescentes y detalle de accesorios
     document.querySelectorAll(".layer-toggle").forEach(btn => {
       btn.addEventListener("click", () => {
-        const sys = btn.dataset.sys;
         const next = btn.getAttribute("aria-pressed") !== "true";
         btn.setAttribute("aria-pressed", String(next));
-        if (sysGroups[sys]) sysGroups[sys].visible = next;
+        if (btn.id === "btn-toggle-fittings") {
+          fittingNodes.forEach(n => { n.visible = next; });
+        } else if (btn.dataset.sys && sysGroups[btn.dataset.sys]) {
+          sysGroups[btn.dataset.sys].visible = next;
+        }
       });
     });
 

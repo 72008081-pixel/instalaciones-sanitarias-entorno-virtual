@@ -214,6 +214,7 @@ html, body {
 .sw-pluv { background: #ffe600; box-shadow: 0 0 8px #ffe600; }
 .sw-aci  { background: #ff2244; box-shadow: 0 0 8px #ff2244; }
 .sw-arch { background: #94a3b8; border: 1px dashed #e2e8f0; }
+.sw-fit  { background: #38bdf8; border: 1px solid #f8fafc; box-shadow: 0 0 6px #38bdf8; }
 
 .floor-grid, .zoom-bar {
   display: grid;
